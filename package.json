@@ -1,0 +1,16 @@
+
+{
+  "name": "3d-lpi-studio",
+  "version": "1.0.0",
+  "description": "Lenticular LPI Finder for Android",
+  "main": "index.js",
+  "scripts": {
+    "build": "echo 'Building web assets...' && mkdir -p dist && cp index.html manifest.json *.tsx *.ts dist/ 2>/dev/null || true",
+    "cap-sync": "npx cap sync"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/core": "^6.0.0"
+  }
+}

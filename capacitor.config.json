@@ -1,0 +1,7 @@
+
+{
+  "appId": "com.lpistudio.app",
+  "appName": "LPI Studio 3D",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}

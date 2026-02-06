@@ -1,0 +1,8 @@
+{
+  "name": "Lenticular LPI Discovery Tool",
+  "description": "A precision tool for calibrating and discovering the Lines Per Inch (LPI) of lenticular lenses, optimized for high-DPI mobile screens.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "androidPackageName": "com.lpistudio.app"
+}
