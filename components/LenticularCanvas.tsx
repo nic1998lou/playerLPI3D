@@ -10,53 +10,71 @@ interface Props {
 const LenticularCanvas: React.FC<Props> = ({ state, onUpdate }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
   
-  // Persistent auxiliary canvases to avoid garbage collection pressure and allocation overhead
   const v1Canvas = useRef<HTMLCanvasElement>(document.createElement('canvas'));
   const v2Canvas = useRef<HTMLCanvasElement>(document.createElement('canvas'));
   const maskCanvas = useRef<HTMLCanvasElement>(document.createElement('canvas'));
   const compCanvas = useRef<HTMLCanvasElement>(document.createElement('canvas'));
   
-  // Cache for avoiding redundant mask calculations
   const lastMaskKey = useRef<string>("");
 
   useEffect(() => {
+    // Setup Video
     const video = document.createElement('video');
     video.style.display = 'none';
     video.loop = true;
-    video.muted = true;
+    video.muted = false; // Som habilitado
+    video.volume = 1.0;
     video.playsInline = true;
     video.crossOrigin = "anonymous";
     videoRef.current = video;
+
+    // Setup Image
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    imageRef.current = img;
 
     return () => {
       video.pause();
       video.src = "";
       video.load();
+      img.src = "";
     };
   }, []);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    const img = imageRef.current;
+    if (!video || !img) return;
 
-    if (state.videoUrl && video.src !== state.videoUrl) {
-      video.src = state.videoUrl;
-      video.load();
-    }
-
-    if (state.isPlaying) {
-      // Use catch to handle interrupted play() requests (e.g. rapid pause/play)
-      video.play().catch(() => {});
+    if (state.mediaUrl && state.mediaType === 'video') {
+      if (video.src !== state.mediaUrl) {
+        video.src = state.mediaUrl;
+        video.load();
+      }
+      if (state.isPlaying) {
+        video.play().catch((err) => {
+          console.warn("Autoplay com som bloqueado. Tentando mudo...", err);
+          video.muted = true;
+          video.play().catch(e => console.error("Erro fatal ao dar play:", e));
+        });
+      } else {
+        video.pause();
+      }
+    } else if (state.mediaUrl && state.mediaType === 'image') {
+      if (img.src !== state.mediaUrl) {
+        img.src = state.mediaUrl;
+      }
+      if (video) video.pause();
     } else {
-      video.pause();
+      if (video) video.pause();
     }
-  }, [state.videoUrl, state.isPlaying]);
+  }, [state.mediaUrl, state.mediaType, state.isPlaying]);
 
   const updateMask = (width: number, height: number, dpr: number) => {
     const { lpi, offset, thickness, orientation, colorMode, basePpi } = state;
     
-    // Safety check for critical numbers
     if (lpi <= 0 || basePpi <= 0 || width <= 0 || height <= 0) return;
 
     const key = `${width}-${height}-${lpi}-${offset}-${thickness}-${orientation}-${colorMode}-${basePpi}`;
@@ -77,20 +95,44 @@ const LenticularCanvas: React.FC<Props> = ({ state, onUpdate }) => {
     const pixelsPerLens = (basePpi * dpr) / lpi;
     const phaseShift = (offset * pixelsPerLens);
     const isVertical = orientation === Orientation.VERTICAL;
+    const stripeWidth = Math.max(0.1, pixelsPerLens * thickness);
     
-    ctx.fillStyle = '#fff';
-
     const dim = isVertical ? width : height;
     const lensCount = Math.ceil(dim / pixelsPerLens) + 2;
-    const stripeWidth = Math.max(0.1, pixelsPerLens * thickness);
 
-    // Render the interlacing mask
-    for (let i = -1; i < lensCount; i++) {
-      const pos = i * pixelsPerLens - (phaseShift % pixelsPerLens);
-      if (isVertical) {
-        ctx.fillRect(pos, 0, stripeWidth, height);
-      } else {
-        ctx.fillRect(0, pos, width, stripeWidth);
+    if (colorMode === ColorMode.RGB) {
+      // Lógica RGB: Divide a faixa em 3 sub-faixas (R, G, B)
+      // Ajustamos a largura de cada sub-pixel para caber dentro da stripeWidth definida
+      const subWidth = stripeWidth / 3;
+
+      for (let i = -1; i < lensCount; i++) {
+        const pos = i * pixelsPerLens - (phaseShift % pixelsPerLens);
+        if (isVertical) {
+          ctx.fillStyle = '#FF0000';
+          ctx.fillRect(pos, 0, subWidth, height);
+          ctx.fillStyle = '#00FF00';
+          ctx.fillRect(pos + subWidth, 0, subWidth, height);
+          ctx.fillStyle = '#0000FF';
+          ctx.fillRect(pos + (subWidth * 2), 0, subWidth, height);
+        } else {
+          ctx.fillStyle = '#FF0000';
+          ctx.fillRect(0, pos, width, subWidth);
+          ctx.fillStyle = '#00FF00';
+          ctx.fillRect(0, pos + subWidth, width, subWidth);
+          ctx.fillStyle = '#0000FF';
+          ctx.fillRect(0, pos + (subWidth * 2), width, subWidth);
+        }
+      }
+    } else {
+      // Lógica Padrão (Branco/Sólido)
+      ctx.fillStyle = '#fff';
+      for (let i = -1; i < lensCount; i++) {
+        const pos = i * pixelsPerLens - (phaseShift % pixelsPerLens);
+        if (isVertical) {
+          ctx.fillRect(pos, 0, stripeWidth, height);
+        } else {
+          ctx.fillRect(0, pos, width, stripeWidth);
+        }
       }
     }
   };
@@ -103,86 +145,117 @@ const LenticularCanvas: React.FC<Props> = ({ state, onUpdate }) => {
 
     const width = mainCanvas.width;
     const height = mainCanvas.height;
-    if (width <= 0 || height <= 0) return;
-
     const dpr = window.devicePixelRatio || 1;
     const video = videoRef.current;
+    const image = imageRef.current;
     
-    // Check if video is actually ready for drawing to avoid InvalidStateError or NaN errors
-    const isVideoReady = !!(state.videoUrl && video && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0);
+    const isVideoReady = !!(state.mediaUrl && state.mediaType === 'video' && video && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0);
+    const isImageReady = !!(state.mediaUrl && state.mediaType === 'image' && image && image.complete && image.naturalWidth > 0);
+    const isPlaying = state.isPlaying;
 
     try {
-      if (!isVideoReady) {
-        // --- CALIBRATION MODE ---
+      // --- MODO CALIBRAÇÃO (Sem mídia ou Pausado sem mídia carregada) ---
+      if (!state.mediaUrl || (!isImageReady && !isVideoReady) || !isPlaying) {
         updateMask(width, height, dpr);
-        
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, width, height);
         
-        const color = state.colorMode === ColorMode.GREEN ? '#0f0' : '#fff';
-        const cCtx = compCanvas.current.getContext('2d');
-        if (cCtx) {
-          cCtx.clearRect(0, 0, width, height);
-          cCtx.drawImage(maskCanvas.current, 0, 0);
-          cCtx.globalCompositeOperation = 'source-in';
-          cCtx.fillStyle = color;
-          cCtx.fillRect(0, 0, width, height);
-          cCtx.globalCompositeOperation = 'source-over';
-          ctx.drawImage(compCanvas.current, 0, 0);
+        // Se for RGB, desenhamos a máscara colorida diretamente
+        if (state.colorMode === ColorMode.RGB) {
+           ctx.drawImage(maskCanvas.current, 0, 0);
+        } else {
+          // Se for BW ou GREEN, usamos a técnica de tintura
+          const color = state.colorMode === ColorMode.GREEN ? '#0f0' : '#fff';
+          const cCtx = compCanvas.current.getContext('2d');
+          if (cCtx) {
+            cCtx.clearRect(0, 0, width, height);
+            cCtx.drawImage(maskCanvas.current, 0, 0);
+            cCtx.globalCompositeOperation = 'source-in';
+            cCtx.fillStyle = color;
+            cCtx.fillRect(0, 0, width, height);
+            cCtx.globalCompositeOperation = 'source-over';
+            ctx.drawImage(compCanvas.current, 0, 0);
+          }
         }
         return;
       }
 
-      // --- VIDEO MODE (SBS) ---
-      const vW = video!.videoWidth;
-      const vH = video!.videoHeight;
-      const sbsWidth = vW / 2;
-      const videoAspect = sbsWidth / vH;
-      const canvasAspect = width / height;
+      // --- MODO MÍDIA SBS (Side-by-Side) ---
+      let srcW, srcH;
+      let source: HTMLVideoElement | HTMLImageElement;
 
-      // Safe aspect ratio calculations
-      let dW, dH, dX, dY;
-      if (videoAspect > canvasAspect) {
-        dW = width;
-        dH = width / videoAspect;
-        dX = 0;
-        dY = (height - dH) / 2;
+      if (state.mediaType === 'video') {
+        source = video!;
+        srcW = video!.videoWidth;
+        srcH = video!.videoHeight;
       } else {
-        dH = height;
-        dW = height * videoAspect;
-        dX = (width - dW) / 2;
-        dY = 0;
+        source = image!;
+        srcW = image!.naturalWidth;
+        srcH = image!.naturalHeight;
       }
 
-      // Validate dimensions to prevent drawImage crashes
-      if (isNaN(dW) || isNaN(dH) || isNaN(dX) || isNaN(dY) || dW <= 0 || dH <= 0) return;
+      const viewW = srcW / 2;
+      const viewH = srcH;
+      
+      let mediaAspect = viewW / viewH;
+      if (state.videoRatio === '16:9') mediaAspect = 16/9;
+      else if (state.videoRatio === '4:3') mediaAspect = 4/3;
+      else if (state.videoRatio === '21:9') mediaAspect = 21/9;
+      else if (state.videoRatio === '1:1') mediaAspect = 1;
 
-      // 1. Prepare View 1 (Left Eye) buffer
+      const isVerticalMode = state.orientation === Orientation.VERTICAL;
+      
+      const topSafePadding = isVerticalMode ? 60 * dpr : 0;
+      const bottomToolboxHeight = isVerticalMode ? height * 0.40 : 0;
+      
+      const availableWidth = width;
+      const availableHeight = height - topSafePadding - bottomToolboxHeight;
+      
+      const targetAspect = availableWidth / availableHeight;
+
+      let drawW, drawH, drawX, drawY;
+
+      if (mediaAspect > targetAspect) {
+        drawW = availableWidth;
+        drawH = availableWidth / mediaAspect;
+        drawX = 0;
+        drawY = topSafePadding + (availableHeight - drawH) / 2;
+      } else {
+        drawH = availableHeight;
+        drawW = availableHeight * mediaAspect;
+        drawX = (availableWidth - drawW) / 2;
+        drawY = topSafePadding;
+      }
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, width, height);
+
       const ctx1 = v1Canvas.current.getContext('2d', { alpha: false });
       if (ctx1) {
         ctx1.imageSmoothingEnabled = false;
         ctx1.fillStyle = '#000';
         ctx1.fillRect(0, 0, width, height);
-        ctx1.drawImage(video!, 0, 0, sbsWidth, vH, dX, dY, dW, dH);
+        ctx1.drawImage(source, 0, 0, viewW, viewH, drawX, drawY, drawW, drawH);
       }
 
-      // 2. Prepare View 2 (Right Eye) buffer
       const ctx2 = v2Canvas.current.getContext('2d', { alpha: false });
       if (ctx2) {
         ctx2.imageSmoothingEnabled = false;
         ctx2.fillStyle = '#000';
         ctx2.fillRect(0, 0, width, height);
-        ctx2.drawImage(video!, sbsWidth, 0, sbsWidth, vH, dX, dY, dW, dH);
+        ctx2.drawImage(source, viewW, 0, viewW, viewH, drawX, drawY, drawW, drawH);
       }
 
-      // 3. Update Calibration Mask (Cached)
       updateMask(width, height, dpr);
 
-      // 4. Final Composition
-      // Layer 1: Right Eye (Base)
+      // Composição final para vídeo/imagem
+      // Nota: No modo RGB com vídeo, isso usará a máscara (alpha) das listras RGB. 
+      // Como todas tem alpha 1, funciona como uma máscara normal.
+      // Se quiséssemos separação de canais RGB no vídeo, seria muito mais complexo,
+      // então para mídia mantemos o comportamento de entrelaçamento padrão (L/R).
+      
       ctx.drawImage(v2Canvas.current, 0, 0);
       
-      // Layer 2: Masked Left Eye
       const cCtx = compCanvas.current.getContext('2d');
       if (cCtx) {
         cCtx.clearRect(0, 0, width, height);
@@ -190,11 +263,9 @@ const LenticularCanvas: React.FC<Props> = ({ state, onUpdate }) => {
         cCtx.globalCompositeOperation = 'destination-in';
         cCtx.drawImage(maskCanvas.current, 0, 0);
         cCtx.globalCompositeOperation = 'source-over';
-        
         ctx.drawImage(compCanvas.current, 0, 0);
       }
     } catch (err) {
-      // Catch rare Canvas or Video DOM errors during transitions
       console.warn("Render loop warning:", err);
     }
   }, [state]);
@@ -216,13 +287,12 @@ const LenticularCanvas: React.FC<Props> = ({ state, onUpdate }) => {
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
       
-      // Sync auxiliary buffers dimensions outside of draw() to prevent layout thrashing
       [v1Canvas, v2Canvas, maskCanvas, compCanvas].forEach(ref => {
         ref.current.width = newWidth;
         ref.current.height = newHeight;
       });
       
-      lastMaskKey.current = ""; // Invalidate cache
+      lastMaskKey.current = "";
     }
   }, []);
 

@@ -17,7 +17,10 @@ export interface CalibrationState {
   orientation: Orientation;
   colorMode: ColorMode;
   basePpi: number;
-  videoUrl: string | null;
+  mediaUrl: string | null;
+  mediaType: 'video' | 'image' | null;
   isPlaying: boolean;
   autoOrientation: boolean;
+  precisionMode: boolean;
+  videoRatio: 'auto' | '16:9' | '4:3' | '21:9' | '1:1';
 }

@@ -1,7 +1,6 @@
-
 {
-  "short_name": "LPI Studio",
-  "name": "3D Lenticular LPI Studio",
+  "short_name": "3D LPI",
+  "name": "3D LPI PLAYER",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/1077/1077114.png",

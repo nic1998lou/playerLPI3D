@@ -1,5 +1,5 @@
 
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { CalibrationState, Orientation, ColorMode } from '../types';
 
 interface Props {
@@ -9,136 +9,199 @@ interface Props {
 
 const Controls: React.FC<Props> = ({ state, onUpdate }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [anchorLpi, setAnchorLpi] = useState<number>(state.lpi);
+
+  const LPI_MIN = 10;
+  const LPI_MAX = 500;
+  const DEFAULT_LPI = 260.0;
+  const PRECISION_RANGE = 0.05; 
+
+  const RATIOS: ('auto' | '16:9' | '4:3' | '21:9' | '1:1')[] = ['auto', '16:9', '4:3', '21:9', '1:1'];
+
+  useEffect(() => {
+    if (state.precisionMode) {
+      setAnchorLpi(state.lpi);
+    }
+  }, [state.precisionMode]);
+
+  useEffect(() => {
+    if (state.precisionMode) {
+      const diff = Math.abs(state.lpi - anchorLpi);
+      if (diff > PRECISION_RANGE * 0.8) {
+        setAnchorLpi(state.lpi);
+      }
+    }
+  }, [state.lpi, state.precisionMode, anchorLpi]);
+
+  const handleReset = () => {
+    onUpdate({
+      lpi: DEFAULT_LPI,
+      offset: 0.0,
+      precisionMode: false
+    });
+    setAnchorLpi(DEFAULT_LPI);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const url = URL.createObjectURL(file);
-      onUpdate({ videoUrl: url, isPlaying: true });
+      const isImage = file.type.startsWith('image/');
+      onUpdate({ 
+        mediaUrl: url, 
+        mediaType: isImage ? 'image' : 'video',
+        isPlaying: true 
+      });
     }
   };
 
-  const LPI_MIN = 240;
-  const LPI_MAX = 280;
+  const cycleRatio = () => {
+    const currentIndex = RATIOS.indexOf(state.videoRatio);
+    const nextIndex = (currentIndex + 1) % RATIOS.length;
+    onUpdate({ videoRatio: RATIOS[nextIndex] });
+  };
+
+  let sMin = LPI_MIN;
+  let sMax = LPI_MAX;
+  let sStep = "0.01";
+  
+  if (state.precisionMode) {
+    sMin = anchorLpi - PRECISION_RANGE;
+    sMax = anchorLpi + PRECISION_RANGE;
+    sStep = "0.00001";
+  }
 
   return (
-    <div className="space-y-4 max-w-md mx-auto">
-      {/* MEDIA SECTION */}
-      <div className="bg-white/5 p-3 rounded-lg border border-white/5 space-y-3">
+    <div className="space-y-2 max-w-md mx-auto">
+      {/* SEÇÃO DE MÍDIA */}
+      <div className="bg-white/5 p-2 rounded-lg border border-white/10 space-y-1.5">
         <div className="flex items-center justify-between">
-          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">3D Media Engine</label>
-          {state.videoUrl && (
-            <button 
-              onClick={() => onUpdate({ videoUrl: null, isPlaying: false })}
-              className="text-[10px] text-red-400 hover:text-red-300 transition-colors"
-            >FECHAR VÍDEO</button>
-          )}
+          <label className="text-[8px] font-black text-blue-500 uppercase tracking-widest">3D SBS Media</label>
+          <div className="flex gap-2">
+            {state.mediaUrl && (
+              <button 
+                onClick={cycleRatio}
+                className="text-[8px] text-blue-400 font-black bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20"
+              >
+                RATIO: {state.videoRatio.toUpperCase()}
+              </button>
+            )}
+            {state.mediaUrl && (
+              <button 
+                onClick={() => onUpdate({ mediaUrl: null, mediaType: null, isPlaying: false })}
+                className="text-[8px] text-red-500 font-bold flex items-center gap-1 bg-red-500/10 px-1.5 py-0.5 rounded"
+              >
+                FECHAR
+              </button>
+            )}
+          </div>
         </div>
-        
-        <div className="flex gap-2">
-          {!state.videoUrl ? (
+        <div className="flex gap-1.5">
+          {!state.mediaUrl ? (
             <button 
               onClick={() => fileInputRef.current?.click()}
-              className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-bold transition-all flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              ABRIR VÍDEO SBS
-            </button>
+              className="flex-1 py-2 bg-blue-600 active:bg-blue-800 text-white rounded-md text-[9px] font-black shadow-lg shadow-blue-900/10"
+            >ABRIR MÍDIA 3D (FOTO/VÍDEO)</button>
           ) : (
             <button 
               onClick={() => onUpdate({ isPlaying: !state.isPlaying })}
-              className={`flex-1 py-3 rounded text-xs font-bold transition-all flex items-center justify-center gap-2 ${state.isPlaying ? 'bg-amber-600 text-white' : 'bg-green-600 text-white'}`}
+              className={`flex-1 py-2 rounded-md text-[9px] font-black transition-all ${state.isPlaying ? 'bg-amber-600 text-white' : 'bg-green-600 text-white'}`}
             >
-              {state.isPlaying ? (
-                <><svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg> PAUSAR</>
-              ) : (
-                <><svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg> REPRODUZIR</>
-              )}
+              {state.mediaType === 'video' ? (state.isPlaying ? 'PAUSAR' : 'REPRODUZIR') : (state.isPlaying ? 'OCULTAR' : 'MOSTRAR')}
             </button>
           )}
           <input 
             type="file" 
             ref={fileInputRef} 
             onChange={handleFileChange} 
-            accept="video/*" 
+            accept="video/*,image/*" 
             className="hidden" 
           />
         </div>
       </div>
 
-      {/* CALIBRATION SECTION */}
-      <div className="space-y-4">
-        {/* LPI SLIDER */}
-        <div className="space-y-1">
-          <div className="flex justify-between items-center text-xs">
-            <label className="font-semibold text-gray-300">Calibração LPI (240-280)</label>
-            <div className="flex items-center gap-1">
-              <div className="flex bg-gray-800 rounded overflow-hidden mr-2">
-                 <button onClick={() => onUpdate({ lpi: Math.max(LPI_MIN, state.lpi - 0.001) })} className="px-2 py-1 text-[8px] hover:bg-blue-600 border-r border-gray-700">-001</button>
-                 <button onClick={() => onUpdate({ lpi: Math.max(LPI_MIN, state.lpi - 0.1) })} className="px-2 py-1 text-[8px] hover:bg-blue-600">-0.1</button>
-              </div>
-              <span className="font-mono text-blue-400 w-20 text-center text-sm font-bold">{state.lpi.toFixed(3)}</span>
-              <div className="flex bg-gray-800 rounded overflow-hidden ml-2">
-                <button onClick={() => onUpdate({ lpi: Math.min(LPI_MAX, state.lpi + 0.1) })} className="px-2 py-1 text-[8px] hover:bg-blue-600 border-r border-gray-700">+0.1</button>
-                <button onClick={() => onUpdate({ lpi: Math.min(LPI_MAX, state.lpi + 0.001) })} className="px-2 py-1 text-[8px] hover:bg-blue-600">+001</button>
-              </div>
-            </div>
-          </div>
-          <input type="range" min={LPI_MIN} max={LPI_MAX} step="0.001" value={state.lpi} onChange={(e) => onUpdate({ lpi: parseFloat(e.target.value) })} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-        </div>
-
-        {/* OFFSET SLIDER */}
-        <div className="space-y-1">
-          <div className="flex justify-between items-center text-xs">
-            <label className="font-semibold text-gray-300">Fase (Alinhamento 3D)</label>
-            <span className="font-mono text-green-400">{state.offset.toFixed(3)}</span>
-          </div>
-          <input type="range" min="-1" max="1" step="0.001" value={state.offset} onChange={(e) => onUpdate({ offset: parseFloat(e.target.value) })} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500" />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <div className="flex justify-between items-center">
-              <label className="text-[10px] text-gray-500 uppercase tracking-tighter">Orientação</label>
+      {/* CONTROLE DE LPI */}
+      <div className="bg-white/5 p-2.5 rounded-lg border border-white/10 space-y-2.5 shadow-xl">
+        <div className="flex justify-between items-end">
+          <div className="flex flex-col flex-1">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Frequência (LPI)</span>
               <button 
-                onClick={() => onUpdate({ autoOrientation: !state.autoOrientation })}
-                className={`text-[8px] px-1 rounded border ${state.autoOrientation ? 'border-blue-500 text-blue-500 bg-blue-500/10' : 'border-gray-600 text-gray-500'}`}
+                onClick={handleReset}
+                className="p-0.5 text-gray-500 hover:text-red-400 active:rotate-180 transition-all duration-500"
+                title="Resetar"
               >
-                AUTO: {state.autoOrientation ? 'ON' : 'OFF'}
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h5M20 20v-5h-5M20 9.414A9 9 0 1018.607 15" />
+                </svg>
               </button>
             </div>
-            <div className="flex gap-1">
-              <button onClick={() => onUpdate({ orientation: Orientation.VERTICAL, autoOrientation: false })} className={`flex-1 py-1.5 text-[10px] font-bold rounded ${state.orientation === Orientation.VERTICAL && !state.autoOrientation ? 'bg-blue-600 text-white' : state.orientation === Orientation.VERTICAL ? 'bg-blue-900/40 text-blue-300' : 'bg-gray-800 text-gray-400'}`}>VERT</button>
-              <button onClick={() => onUpdate({ orientation: Orientation.HORIZONTAL, autoOrientation: false })} className={`flex-1 py-1.5 text-[10px] font-bold rounded ${state.orientation === Orientation.HORIZONTAL && !state.autoOrientation ? 'bg-blue-600 text-white' : state.orientation === Orientation.HORIZONTAL ? 'bg-blue-900/40 text-blue-300' : 'bg-gray-800 text-gray-400'}`}>HORIZ</button>
+            
+            <div className="flex items-center gap-2">
+              <span className={`text-2xl font-mono font-black tabular-nums transition-colors ${state.precisionMode ? 'text-blue-400' : 'text-blue-200'}`}>
+                {state.lpi.toFixed(4)}
+              </span>
+              
+              <div className="flex items-center bg-gray-900/80 rounded border border-gray-800 p-0.5 shadow-inner">
+                <span className="px-1.5 text-[7px] font-black text-gray-500 uppercase tracking-tighter">PRECISÃO</span>
+                <button 
+                  onClick={() => onUpdate({ precisionMode: !state.precisionMode })}
+                  className={`px-2 py-0.5 rounded text-[8px] font-black transition-all ${state.precisionMode ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-400 animate-pulse' : 'bg-gray-800 text-gray-400 opacity-60'}`}
+                >
+                  {state.precisionMode ? 'ON' : 'OFF'}
+                </button>
+              </div>
             </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-[10px] text-gray-500 uppercase tracking-tighter">Modo Sub-Pixel</label>
-            <div className="flex gap-1">
-              <button onClick={() => onUpdate({ colorMode: ColorMode.BW })} className={`flex-1 py-1.5 text-[10px] font-bold rounded ${state.colorMode === ColorMode.BW ? 'bg-white text-black' : 'bg-gray-800 text-gray-400'}`}>OFF</button>
-              <button onClick={() => onUpdate({ colorMode: ColorMode.RGB })} className={`flex-1 py-1.5 text-[10px] font-bold rounded ${state.colorMode === ColorMode.RGB ? 'bg-gradient-to-r from-red-600 via-green-600 to-blue-600 text-white' : 'bg-gray-800 text-gray-400'}`}>RGB</button>
-            </div>
-          </div>
+        </div>
+
+        <div className="relative h-8 flex items-center">
+          <input 
+            type="range" 
+            min={sMin} 
+            max={sMax} 
+            step={sStep} 
+            value={state.lpi} 
+            onChange={(e) => onUpdate({ lpi: parseFloat(e.target.value) })}
+            className={`w-full h-3 bg-transparent appearance-none cursor-pointer relative z-10 ${state.precisionMode ? 'accent-blue-400' : 'accent-white'}`}
+          />
         </div>
       </div>
 
-      <details className="text-[10px] pt-2 border-t border-white/5">
-        <summary className="text-gray-500 cursor-pointer py-1">Avançado (PPI da Tela)</summary>
-        <div className="mt-2 space-y-3 bg-white/5 p-2 rounded">
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400">Display PPI:</span>
-            <span className="text-blue-300 font-mono">{state.basePpi}</span>
-          </div>
-          <input type="range" min="100" max="1000" step="1" value={state.basePpi} onChange={(e) => onUpdate({ basePpi: parseInt(e.target.value) })} className="w-full h-1 bg-gray-700 rounded appearance-none cursor-pointer accent-gray-400" />
-          <div className="grid grid-cols-3 gap-1">
-            <button onClick={() => onUpdate({ basePpi: 506 })} className="p-1 bg-gray-800 rounded text-[8px]">S22 Ultra</button>
-            <button onClick={() => onUpdate({ basePpi: 460 })} className="p-1 bg-gray-800 rounded text-[8px]">iPhone 14</button>
-            <button onClick={() => onUpdate({ basePpi: 326 })} className="p-1 bg-gray-800 rounded text-[8px]">Padrão</button>
+      {/* CONTROLE DE FASE */}
+      <div className="bg-white/5 p-2 rounded-lg border border-white/10 space-y-1">
+        <div className="flex justify-between items-center text-[8px] font-bold uppercase text-gray-500">
+          <span>Alinhamento Lateral</span>
+          <span className="text-green-400 font-mono text-[10px]">{state.offset.toFixed(3)}</span>
+        </div>
+        <input 
+          type="range" 
+          min="-1" 
+          max="1" 
+          step="0.001" 
+          value={state.offset} 
+          onChange={(e) => onUpdate({ offset: parseFloat(e.target.value) })}
+          className="w-full h-1 bg-gray-800 rounded-full appearance-none accent-green-500"
+        />
+      </div>
+
+      {/* BOTÕES DE CONFIGURAÇÃO RÁPIDA */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <label className="text-[8px] font-bold text-gray-600 uppercase">Grade</label>
+          <div className="flex gap-1">
+            <button onClick={() => onUpdate({ orientation: Orientation.VERTICAL })} className={`flex-1 py-1.5 text-[8px] font-black rounded-md ${state.orientation === Orientation.VERTICAL ? 'bg-white text-black' : 'bg-gray-800 text-gray-400'}`}>VERT</button>
+            <button onClick={() => onUpdate({ orientation: Orientation.HORIZONTAL })} className={`flex-1 py-1.5 text-[8px] font-black rounded-md ${state.orientation === Orientation.HORIZONTAL ? 'bg-white text-black' : 'bg-gray-800 text-gray-400'}`}>HORIZ</button>
           </div>
         </div>
-      </details>
+        <div className="space-y-1">
+          <label className="text-[8px] font-bold text-gray-600 uppercase">Sub-Pixel</label>
+          <div className="flex gap-1">
+            <button onClick={() => onUpdate({ colorMode: ColorMode.BW })} className={`flex-1 py-1.5 text-[8px] font-black rounded-md ${state.colorMode === ColorMode.BW ? 'bg-white text-black' : 'bg-gray-800 text-gray-400'}`}>OFF</button>
+            <button onClick={() => onUpdate({ colorMode: ColorMode.RGB })} className={`flex-1 py-1.5 text-[8px] font-black rounded-md ${state.colorMode === ColorMode.RGB ? 'bg-gradient-to-r from-red-600/60 via-green-600/60 to-blue-600/60 text-white' : 'bg-gray-800 text-gray-400'}`}>RGB</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -1,7 +1,6 @@
-
 {
-  "appId": "com.lpistudio.app",
-  "appName": "LPI Studio 3D",
+  "appId": "com.lpiplayer.app",
+  "appName": "3D LPI PLAYER",
   "webDir": "www",
   "bundledWebRuntime": false
 }

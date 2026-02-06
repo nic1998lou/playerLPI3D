@@ -1,12 +1,13 @@
-
 {
-  "name": "3d-lpi-studio",
-  "version": "1.0.0",
-  "description": "Lenticular LPI Finder for Android",
+  "name": "3d-lpi-player",
+  "version": "1.2.0",
+  "description": "Lenticular LPI Player for Android",
   "main": "index.js",
   "scripts": {
-    "build": "echo 'Building web assets...' && mkdir -p dist && cp index.html manifest.json *.tsx *.ts dist/ 2>/dev/null || true",
-    "cap-sync": "npx cap sync"
+    "build": "mkdir -p www && cp -r index.html manifest.json index.tsx App.tsx types.ts components/ www/ && echo 'Build: Todos os assets copiados para www/'",
+    "cap-add-android": "npx cap add android",
+    "cap-sync": "npx cap sync android",
+    "cap-open-android": "npx cap open android"
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",

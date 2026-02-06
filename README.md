@@ -1,20 +1,23 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# 3D LPI Studio - Android Build Guide
 
-This contains everything you need to run your app locally.
+Este projeto está configurado para ser transformado em um aplicativo Android (.apk) automaticamente via GitHub Actions.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1yjAFiU665DrFMAvNRm2eSClufPIGEDh-
+## 🚀 Como gerar o APK (Se a pasta .github não foi importada)
 
-## Run Locally
+Se você importou o código e a pasta `.github` sumiu, siga estes passos diretamente no seu repositório do GitHub:
 
-**Prerequisites:**  Node.js
+1. No seu repositório, clique em **Add file** -> **Create new file**.
+2. No campo do nome do arquivo, digite exatamente: `.github/workflows/android-build.yml`
+   * *(O GitHub criará as pastas automaticamente ao ver as barras `/`)*.
+3. Cole o conteúdo do arquivo de workflow (fornecido no código do app) dentro deste novo arquivo.
+4. Clique em **Commit changes**.
 
+## 🛠️ Como baixar o seu APK
+1. Vá na aba **Actions** no topo do seu repositório no GitHub.
+2. Você verá um "workflow" chamado `Build Android APK`.
+3. Clique na execução mais recente (pode levar uns 3-5 minutos para terminar).
+4. Ao final, role até a seção **Artifacts** e baixe o arquivo `LPI-Studio-Debug-APK`.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 📱 Instalação PWA (Sem compilar)
+Se preferir não gerar um APK, abra o link do seu GitHub Pages no Chrome do Android e selecione **"Instalar Aplicativo"** no menu do navegador.
